@@ -1,0 +1,32 @@
+name: autoria-watch
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # кожні 15 хвилин
+  workflow_dispatch:          # кнопка ручного запуску
+
+permissions:
+  contents: write
+
+concurrency:
+  group: autoria-watch
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check auto.ria
+        run: python3 autoria_watch.py
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+
+      - name: Save seen listings
+        run: |
+          git config user.name "autoria-bot"
+          git config user.email "autoria-bot@users.noreply.github.com"
+          git add seen.json
+          git diff --cached --quiet || (git commit -m "update seen" && git push)
