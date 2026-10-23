@@ -122,7 +122,8 @@ def parse_listing(page_html, slug):
     m = re.search(r"ціна\s+([\d\s]+)\s*(\$|€|грн)", desc) or re.search(r"ціна\s+([\d\s]+)\s*(\$|€|грн)", title)
     if m:
         info["price"] = f"{_num(m.group(1))} {m.group(2)}"
-    info["gearbox"] = _cap(_search(r"коробка передач\s+([^,]+)", keywords))
+    info["gearbox"] = _cap(_search(
+        r"коробка передач\s+(ручна\s*/\s*механіка|[^\s,]+)", keywords))
     info["city"] = _search(r"\sбу\s+(в\s+[^,]+?),\s*ціна", title) or _search(r"\s(в\s+[^,]+?),\s*ціна", title)
     info["photo"] = meta.get("og:image")
     return info
