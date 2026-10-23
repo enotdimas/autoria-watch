@@ -17,7 +17,11 @@ import urllib.request
 SEARCH_URLS = [
     # Hyundai Elantra, Київська обл., до 6500$, автомат
     "https://auto.ria.com/uk/search/?search_type=2&category=1&all[0].any[0].brand=29&all[0].any[0].any[0].model=3086&all[1].any[0].state=10&price[0]=1&price[2]=6500&gearbox[0]=2&abroad=0&customs_cleared=1&order=7&page=0&limit=20",
-    # Додайте сюди інші фільтри — кожен у лапках, через кому
+    # Honda Civic, Київська обл., до 6500$, автомат
+    "https://auto.ria.com/uk/search/?search_type=2&category=1&all[0].any[0].brand=28&all[0].any[0].any[0].model=265&all[1].any[0].state=10&price[0]=1&price[2]=6500&gearbox[0]=2&abroad=0&customs_cleared=1&order=7&page=0&limit=20"
+    # Hyundai Accent, Київська обл., до 6500$, автомат
+    "https://auto.ria.com/uk/search/?search_type=2&category=1&all[0].any[0].brand=29&all[0].any[0].any[0].model=1258&all[1].any[0].state=10&price[0]=1&price[2]=6500&gearbox[0]=2&abroad=0&customs_cleared=1&order=7&page=0&limit=20"
+  # Додайте сюди інші фільтри — кожен у лапках, через кому
 ]
 
 STATE_FILE = "seen.json"
