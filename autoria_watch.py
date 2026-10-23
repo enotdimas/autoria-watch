@@ -5,6 +5,8 @@
   TG_TOKEN    — токен бота від @BotFather
   TG_CHAT_ID  — ваш chat id
 Фільтри — у списку SEARCH_URLS нижче (сортування "Дата додавання", order=7).
+Новий фільтр можна додати будь-коли: при першій перевірці його поточні
+оголошення тихо запам'ятовуються, а надсилаються лише ті, що з'являться потім.
 """
 import json
 import os
@@ -15,17 +17,17 @@ import urllib.parse
 import urllib.request
 
 SEARCH_URLS = [
-    # Hyundai Elantra, Київська обл., до 6500$, автомат
+    # Фільтр 1
     "https://auto.ria.com/uk/search/?search_type=2&category=1&all[0].any[0].brand=29&all[0].any[0].any[0].model=3086&all[1].any[0].state=10&price[0]=1&price[2]=6500&gearbox[0]=2&abroad=0&customs_cleared=1&order=7&page=0&limit=20",
-    # Honda Civic, Київська обл., до 6500$, автомат
-    "https://auto.ria.com/uk/search/?search_type=2&category=1&all[0].any[0].brand=28&all[0].any[0].any[0].model=265&all[1].any[0].state=10&price[0]=1&price[2]=6500&gearbox[0]=2&abroad=0&customs_cleared=1&order=7&page=0&limit=20"
-    # Hyundai Accent, Київська обл., до 6500$, автомат
-    "https://auto.ria.com/uk/search/?search_type=2&category=1&all[0].any[0].brand=29&all[0].any[0].any[0].model=1258&all[1].any[0].state=10&price[0]=1&price[2]=6500&gearbox[0]=2&abroad=0&customs_cleared=1&order=7&page=0&limit=20"
-  # Додайте сюди інші фільтри — кожен у лапках, через кому
+    # Фільтр 2
+    "https://auto.ria.com/uk/search/?search_type=2&category=1&all[0].any[0].brand=29&all[0].any[0].any[0].model=1258&all[1].any[0].state=10&price[0]=1&price[2]=6500&gearbox[0]=2&abroad=0&customs_cleared=1&order=7&page=0&limit=20",
+    # Фільтр 3
+    "https://auto.ria.com/uk/search/?search_type=2&category=1&all[0].any[0].brand=28&all[0].any[0].any[0].model=265&all[1].any[0].state=10&price[0]=1&price[2]=6500&gearbox[0]=2&abroad=0&customs_cleared=1&order=7&page=0&limit=20",
+    # Додайте сюди інші фільтри — кожен у лапках, через кому
 ]
 
 STATE_FILE = "seen.json"
-MAX_SEEN = 3000
+MAX_SEEN = 5000
 LISTING_RE = re.compile(r"auto_[a-z0-9_-]+?_(\d{6,})\.html")
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -59,41 +61,49 @@ def send_telegram(text):
 def load_state():
     try:
         with open(STATE_FILE, encoding="utf-8") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return None
+            data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {"seen": [], "urls": []}
+    if isinstance(data, list):  # старий формат: лише список id
+        return {"seen": data, "urls": None}
+    return data
 
 
 def main():
     state = load_state()
-    first_run = state is None
-    seen = state or []
+    seen = state["seen"]
     seen_set = set(seen)
-    new_items, total = [], 0
+    # urls=None — старий формат: невідомо, які фільтри вже бачили, тож
+    # тихо запам'ятовуємо всі, щоб не надіслати старі оголошення
+    known_urls = set(state["urls"] or [])
 
+    new_items, baselined = [], []
     for url in SEARCH_URLS:
         found = listings(fetch(url))
-        total += len(found)
+        is_new_filter = url not in known_urls
         for lid, link in found.items():
             if lid not in seen_set:
                 seen_set.add(lid)
                 seen.append(lid)
-                new_items.append(link)
+                if not is_new_filter:
+                    new_items.append(link)
+        if is_new_filter:
+            baselined.append(len(found))
         time.sleep(2)
 
-    if first_run:
+    if baselined:
         send_telegram(
-            f"✅ Моніторинг auto.ria запущено. Зараз у фільтрах {total} оголошень — "
-            "надсилатиму лише нові."
+            f"✅ Додано фільтрів до моніторингу: {len(baselined)} "
+            f"(зараз у них {sum(baselined)} оголошень). Надсилатиму лише нові."
         )
-    else:
-        for link in new_items:
-            send_telegram(f"🚗 Нове оголошення:\n{link}")
-            time.sleep(1)
+    for link in new_items:
+        send_telegram(f"🚗 Нове оголошення:\n{link}")
+        time.sleep(1)
 
-    print(f"Знайдено на сторінках: {total}, нових: {0 if first_run else len(new_items)}")
+    print(f"Фільтрів: {len(SEARCH_URLS)}, нових фільтрів: {len(baselined)}, "
+          f"нових оголошень: {len(new_items)}")
     with open(STATE_FILE, "w", encoding="utf-8") as f:
-        json.dump(seen[-MAX_SEEN:], f)
+        json.dump({"seen": seen[-MAX_SEEN:], "urls": SEARCH_URLS}, f)
 
 
 if __name__ == "__main__":
