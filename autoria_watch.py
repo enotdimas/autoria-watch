@@ -124,7 +124,20 @@ def parse_listing(page_html, slug):
         info["price"] = f"{_num(m.group(1))} {m.group(2)}"
     info["gearbox"] = _cap(_search(
         r"коробка передач\s+(ручна\s*/\s*механіка|[^\s,]+)", keywords))
-    info["city"] = _search(r"\sбу\s+(в\s+[^,]+?),\s*ціна", title) or _search(r"\s(в\s+[^,]+?),\s*ціна", title)
+    # місто в називному відмінку: "місто Біла Церква Hyundai Elantra ..." у keywords
+    city = None
+    if info.get("name"):
+        city = _search(r"місто\s+(.+?)\s+" + re.escape(info["name"]), keywords)
+    region = _search(r"UA,\s*([^,<>]{2,40}?обл\.)", page_html)
+    if not city:
+        city = (_search(r"UA,\s*[^,<>]{2,40}?обл\.,\s*([^,<>]{2,40}?),\s*\d{5}", page_html)
+                or _search(r"UA,\s*([^,<>]{2,40}?),\s*\d{5}", page_html))
+    if city in ("Київ", "Kyiv"):
+        region = None
+    if city:
+        info["city"] = f"{city}, {region}" if region and region not in city else city
+    else:
+        info["city"] = _search(r"\sбу\s+(в\s+[^,]+?),\s*ціна", title) or _search(r"\s(в\s+[^,]+?),\s*ціна", title)
     info["photo"] = meta.get("og:image")
     return info
 
