@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "*/15 * * * *"   # кожні 15 хвилин
   workflow_dispatch:          # кнопка ручного запуску
+    inputs:
+      test:
+        description: "Тест: надіслати найсвіжіше оголошення з кожного фільтра"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -23,6 +28,7 @@ jobs:
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          TEST_MODE: ${{ inputs.test }}
 
       - name: Save seen listings
         run: |
