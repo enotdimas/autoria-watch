@@ -225,21 +225,60 @@ def photo_token():
 
 
 def page_photo_ids(page):
-    """(slug, [photo_id]) зі сторінки оголошення; головне фото — першим."""
+    """(slug, [photo_id], очікувана кількість) зі сторінки оголошення; головне фото — першим.
+
+    У HTML є лише перші ~7 фото галереї. Решта лежить у даних сторінки як числа-id,
+    поруч із фото інших оголошень (схожі авто, інші авто продавця). Тому шукаємо
+    в даних компактний список рівно з N фото (N — лічильник "1 з N"), який містить
+    усі вже відомі фото галереї, і беремо тільки його.
+    """
     page = page.replace("\\/", "/").replace("\\u002F", "/").replace("\\u002f", "/")
-    slug, ids = None, []
-    for m in PHOTO_RE.finditer(page):
-        slug = slug or m.group(1)
-        if int(m.group(2)) not in ids:
-            ids.append(int(m.group(2)))
-    if ids:
-        # решта фото галереї може бути в даних сторінки лише як числа-id:
-        # беремо числа такої ж довжини, близькі до id головного фото
-        main_id = ids[0]
-        extra = {int(n) for n in re.findall(r"(?<!\d)(\d{%d})(?!\d)" % len(str(main_id)), page)
-                 if abs(int(n) - main_id) <= 1000}
-        ids += sorted(extra - set(ids))
-    return slug, ids
+    m = re.search(r"og:image[^>]*?photosnew/auto/photo/([a-z0-9_-]+?)__(\d{6,})", page, re.I) \
+        or re.search(r"photosnew/auto/photo/([a-z0-9_-]+?)__(\d{6,})[^\"'\s]*?(?:hd|fx)\.", page, re.I) \
+        or PHOTO_RE.search(page)
+    if not m:
+        return None, [], None
+    slug, main_id = m.group(1), int(m.group(2))
+    near = lambda n: abs(n - main_id) <= 5000
+
+    # 1) фото галереї з явними посиланнями в розмітці (не в даних скриптів, де
+    #    бувають інші авто продавця): та сама модель і близький номер
+    markup = re.sub(r"<script\b.*?</script>", " ", page, flags=re.I | re.S)
+    known = [main_id]
+    for pm in PHOTO_RE.finditer(markup):
+        pid = int(pm.group(2))
+        if pm.group(1) == slug and near(pid) and pid not in known:
+            known.append(pid)
+
+    cm = re.search(r"\b1\s+з\s+(\d+)\b", page)
+    expected = int(cm.group(1)) if cm else None
+    if not expected or expected <= len(known):
+        return slug, known[:expected] if expected else known, expected
+
+    # 2) шукаємо в даних сторінки найкоротший фрагмент рівно з N різних близьких
+    #    номерів, що містить усі відомі фото галереї — це і є список фото оголошення
+    data = " ".join(re.findall(r"<script\b[^>]*>(.*?)</script>", page, flags=re.I | re.S))
+    digits = len(str(main_id))
+    seq = [(t.start(), int(t.group())) for t in re.finditer(r"(?<!\d)\d{%d}(?!\d)" % digits, data)
+           if near(int(t.group()))]
+    need, best = set(known), None
+    for i in range(len(seq)):
+        seen = []
+        for j in range(i, len(seq)):
+            if seq[j][1] not in seen:
+                seen.append(seq[j][1])
+                if len(seen) > expected:
+                    break
+            if len(seen) == expected and need <= set(seen):
+                span = seq[j][0] - seq[i][0]
+                if best is None or span < best[0]:
+                    best = (span, list(seen))
+                break
+    if best:
+        ids = best[1]
+        ids.sort(key=lambda pid: pid != main_id)  # головне фото — першим
+        return slug, ids, expected
+    return slug, known, expected
 
 
 def download_photo(urls):
@@ -263,7 +302,7 @@ def build_zips(link, slug):
     except Exception as err:
         return None, f"😕 Не вдалося відкрити оголошення ({err}). Можливо, його вже видалено."
     info = parse_listing(page, slug)
-    photo_slug, ids = page_photo_ids(page)
+    photo_slug, ids, expected = page_photo_ids(page)
     if not ids:
         return None, "😕 Не знайшов фото в оголошенні."
     with ThreadPoolExecutor(max_workers=8) as pool:
@@ -301,9 +340,8 @@ def build_zips(link, slug):
         zips.append((f"{base}{f'_part{i}' if len(parts) > 1 else ''}.zip", buf.getvalue()))
 
     caption = [f"📦 <b>{html.escape(title)}</b> — {len(files)} фото"]
-    m = re.search(r"\b1\s+з\s+(\d+)\b", page)
-    if m and len(files) < int(m.group(1)):
-        caption.append(f"⚠️ Зібрано {len(files)} з {m.group(1)} фото (решту сайт не віддає).")
+    if expected and len(files) < expected:
+        caption.append(f"⚠️ Зібрано {len(files)} з {expected} фото (решту сайт не віддає).")
     caption.append(f'👉 <a href="{html.escape(link)}">Оголошення</a>')
     return zips, "\n".join(caption)
 
