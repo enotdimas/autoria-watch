@@ -28,6 +28,7 @@ jobs:
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          TG_PHOTO_TOKEN: ${{ secrets.TG_PHOTO_TOKEN }}
           TEST_MODE: ${{ inputs.test }}
 
       - name: Save seen listings
